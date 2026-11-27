@@ -219,6 +219,26 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
  .countbox b{font-size:1.25rem}
  .button{letter-spacing:.1em;padding:14px 16px}
 }
+
+/* ===== PANTALLAS ANCHAS (computadora / tablet horizontal) ===== */
+@media(min-width:900px){
+ .inner.frame,.frame{width:min(100%,1100px);max-width:1100px;padding:200px 22% 330px;min-height:1040px}
+ .frame:before,.frame:after{aspect-ratio:auto;height:56%}
+ .frame:before{-webkit-mask-image:linear-gradient(#000 65%,transparent);mask-image:linear-gradient(#000 65%,transparent)}
+ .frame:after{-webkit-mask-image:linear-gradient(transparent,#000 35%);mask-image:linear-gradient(transparent,#000 35%)}
+ .f-perga{padding-top:220px}
+ .f-wide{padding:230px 19% 330px}
+ .hero-inner.frame{width:min(100%,1100px);padding:190px 24% 320px}
+ .orn-hero{width:min(60%,360px)}
+ .hero h1{font-size:clamp(4.5rem,7vw,6.2rem)}
+ .hero-cta{flex-direction:row}
+ .vibes{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .frame h2{font-size:2rem}.frame .script{font-size:3rem}
+ .countdown{max-width:420px}
+ .panel{padding:24px 28px 26px}
+}
+@media(min-width:1500px){.inner.frame,.frame,.hero-inner.frame{width:1200px;max-width:1200px}}
+body{background:#0b0607}
 </style>
 </head>
 <body>
