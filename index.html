@@ -622,12 +622,13 @@ form.addEventListener("change",e=>{
 $("nombre").addEventListener("input",()=>$("f-nombre").classList.remove("invalid"));
 
 function buildMessage(d){
-  let m="🤠 *Confirmación XV de Aleyca Melany*\n\n👤 Nombre: "+d.nombre+"\n✅ "+d.asistencia;
+  // Sin emojis: algunos celulares los muestran como "�" en el mensaje de WhatsApp
+  let m="*Confirmación XV de Aleyca Melany*\n\nNombre: "+d.nombre+"\nAsistencia: "+d.asistencia;
   if(d.asistencia==="Sí, asistiré"){
-    m+="\n👥 Personas: "+d.personas;
-    if(d.acompanantes)m+="\n📝 Acompañantes: "+d.acompanantes.replace(/\n+/g,", ");
+    m+="\nPersonas: "+d.personas;
+    if(d.acompanantes)m+="\nAcompañantes: "+d.acompanantes.replace(/\n+/g,", ");
   }
-  if(d.mensaje)m+="\n💌 Mensaje: "+d.mensaje;
+  if(d.mensaje)m+="\nMensaje: "+d.mensaje;
   return m;
 }
 function waLink(text){
@@ -638,8 +639,9 @@ function waLink(text){
 // Texto del botón según la configuración
 (function(){
   const gf=CONFIG.googleForm&&CONFIG.googleForm.action;
-  if(gf&&CONFIG.whatsapp){$("submit-note").textContent="Tu respuesta se registrará y podrás avisarnos también por WhatsApp.";}
-  else if(gf){$("submit-note").textContent="Tu respuesta se registrará de forma automática.";}
+  const saves=!!(gf||CONFIG.sheetUrl);
+  if(saves&&CONFIG.whatsapp){$("submit-note").textContent="Con un solo toque se registra tu respuesta y se abre WhatsApp para que presiones enviar.";}
+  else if(saves){$("submit-note").textContent="Tu respuesta se registrará de forma automática.";}
   if(CONFIG.googleFormUrl.startsWith("https://")){const g=$("gform-link");g.href=CONFIG.googleFormUrl;g.classList.remove("hidden");}
 })();
 
@@ -650,46 +652,42 @@ form.addEventListener("submit",async e=>{
   $("f-nombre").classList.toggle("invalid",!d.nombre);if(!d.nombre)ok=false;
   $("f-asist").classList.toggle("invalid",!d.asistencia);if(!d.asistencia)ok=false;
   if(!ok){const first=form.querySelector(".invalid");first&&first.scrollIntoView({behavior:"smooth",block:"center"});return;}
-  if(d.asistencia!=="Sí, asistiré"){d.personas=0;d.acompanantes="";}
+  const yes=d.asistencia==="Sí, asistiré";
+  if(!yes){d.personas=0;d.acompanantes="";}
 
   const msg=buildMessage(d),link=waLink(msg);
   try{localStorage.setItem("xv-aleyca-rsvp",JSON.stringify(d));}catch(_){}
 
+  // Un solo botón: guarda en el archivo (Google Sheet) y abre WhatsApp en el mismo toque
+  const saves=[];
   const gf=CONFIG.googleForm||{};
-  const onNetlify=/^https?:$/.test(location.protocol)&&CONFIG.guardarRespuestas!==false;
-  let saved=false;
-  if(onNetlify){
-    try{
-      d.personas=d.asistencia==="Sí, asistiré"?personas:0;
-      const body=new URLSearchParams({"form-name":"confirmacion-xv",nombre:d.nombre,asistencia:d.asistencia,personas:String(d.personas),acompanantes:d.acompanantes,mensaje:d.mensaje});
-      const r=await fetch("/",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body.toString()});saved=r.ok;
-    }catch(_){}
-  }
+  const data={nombre:d.nombre,asistencia:d.asistencia,personas:String(d.personas),acompanantes:d.acompanantes,mensaje:d.mensaje};
   if(CONFIG.sheetUrl){
-    try{
-      const b2=new URLSearchParams({nombre:d.nombre,asistencia:d.asistencia,personas:String(d.personas),acompanantes:d.acompanantes,mensaje:d.mensaje});
-      await fetch(CONFIG.sheetUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b2.toString()});
-      saved=true;
-    }catch(_){}
+    saves.push(fetch(CONFIG.sheetUrl,{method:"POST",mode:"no-cors",keepalive:true,headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(data).toString()}));
+  }
+  if(/^https?:$/.test(location.protocol)&&CONFIG.guardarRespuestas!==false&&!CONFIG.sheetUrl){
+    saves.push(fetch("/",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(Object.assign({"form-name":"confirmacion-xv"},data)).toString()}));
   }
   if(gf.action){
-    try{
-      const fd=new FormData(),f=gf.fields||{};
-      Object.keys(f).forEach(k=>{if(f[k])fd.append(f[k],d[k]);});
-      await fetch(gf.action,{method:"POST",mode:"no-cors",body:fd});
-    }catch(_){}
+    const fd=new FormData(),f=gf.fields||{};
+    Object.keys(f).forEach(k=>{if(f[k])fd.append(f[k],d[k]);});
+    saves.push(fetch(gf.action,{method:"POST",mode:"no-cors",body:fd,keepalive:true}));
   }
-  const hasGF=!!gf.action||saved;
-  // Si no se pudo guardar en línea, WhatsApp es el canal de entrega
-  if(!hasGF)window.open(link,"_blank","noopener");
+  // WhatsApp se abre de inmediato (dentro del toque, para que el navegador no lo bloquee)
+  let w=null;
+  if(CONFIG.whatsapp){try{w=window.open(link,"_blank","noopener");}catch(_){}}
 
-  const yes=d.asistencia==="Sí, asistiré";
+  const btn=form.querySelector('button[type="submit"]');
+  if(btn){btn.disabled=true;}
+  const res=await Promise.allSettled(saves);
+  if(btn){btn.disabled=false;}
+
   $("thanks-title").textContent=yes?"¡Gracias, "+d.nombre.split(" ")[0]+"!":"Gracias por avisarnos";
   $("thanks-text").textContent=yes
-    ? "Tu confirmación quedó lista"+(d.personas>1?" para "+d.personas+" personas":"")+". ¡Nos vemos el 29 de diciembre para celebrar a lo grande!"
-    : "Lamentamos que no puedas acompañarnos, pero agradecemos mucho tus buenos deseos.";
+    ? "Tu confirmación quedó registrada"+(d.personas>1?" para "+d.personas+" personas":"")+". Si WhatsApp se abrió, solo presiona enviar. ¡Nos vemos el 29 de diciembre!"
+    : "Lamentamos que no puedas acompañarnos, pero agradecemos mucho tus buenos deseos. Si WhatsApp se abrió, solo presiona enviar.";
   const wa=$("wa-again");wa.href=link;
-  wa.classList.toggle("hidden",hasGF&&!CONFIG.whatsapp);
+  wa.classList.toggle("hidden",!CONFIG.whatsapp);
   form.classList.add("hidden");thanks.classList.add("show");thanks.focus();
   thanks.scrollIntoView({behavior:"smooth",block:"center"});
 });
